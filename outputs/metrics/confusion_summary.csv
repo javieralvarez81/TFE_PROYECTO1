@@ -1,0 +1,5 @@
+metric,value,business_interpretation
+TN,198930,Casos sin stockout correctamente descartados
+FP,179268,Alertas falsas que generarían revisión operativa
+FN,202258,Stockouts reales no detectados por el modelo
+TP,312044,Stockouts correctamente anticipados
