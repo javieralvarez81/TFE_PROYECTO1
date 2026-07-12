@@ -1,4 +1,0 @@
-scenario,threshold,cost_false_negative,cost_false_positive,stockouts_detected,stockouts_missed,false_alerts,alerts_generated,cost_without_model,cost_with_model,estimated_saving
-Alto impacto,0.1,200,15,514302,0,378198,892500,102860400.0,5672970.0,97187430.0
-Conservador,0.1,50,5,514302,0,378198,892500,25715100.0,1890990.0,23824110.0
-Medio,0.1,100,10,514302,0,378198,892500,51430200.0,3781980.0,47648220.0

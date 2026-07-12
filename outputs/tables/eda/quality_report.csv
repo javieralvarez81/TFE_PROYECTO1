@@ -1,0 +1,9 @@
+column,dtype,missing_values,missing_pct,unique_values
+date,datetime64[us],0,0.0,1826
+store_id,str,0,0.0,50
+item_id,str,0,0.0,50
+sales,int64,0,0.0,139
+price,float64,0,0.0,3798
+promo,int64,0,0.0,2
+weekday,int64,0,0.0,7
+month,int64,0,0.0,12
