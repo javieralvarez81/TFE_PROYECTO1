@@ -1,0 +1,15 @@
+,value
+rows,4565000
+columns,10
+date_min,2019-01-01 00:00:00
+date_max,2023-12-31 00:00:00
+stores,50
+items,50
+total_sales,133593174
+average_sales,29.264660240963856
+zero_sales_pct,0.02271631982475356
+average_price,53.993231483023
+promo_rate_pct,9.99986856516977
+exact_duplicates,0
+business_key_duplicates,0
+missing_calendar_dates,0

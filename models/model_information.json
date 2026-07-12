@@ -1,0 +1,7 @@
+{
+    "model_name": "XGBoost",
+    "threshold": 0.5,
+    "cut_date": "2023-01-01",
+    "train_rows": 500000,
+    "test_rows": 200000
+}

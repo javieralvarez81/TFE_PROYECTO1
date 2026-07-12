@@ -1,315 +1,1143 @@
-# Predicción del riesgo de rotura de stock en un entorno logístico
+# Predicción del riesgo de rotura de stock
 
-## 1. Contexto del proyecto
+## Proyecto de Machine Learning aplicado a un entorno logístico
 
-La gestión eficiente del stock es uno de los retos principales en entornos logísticos y de distribución. Una rotura de stock puede provocar pérdida de ventas, incumplimientos de servicio, deterioro de la experiencia del cliente y costes operativos adicionales derivados de reposiciones urgentes o replanificaciones.
+Este repositorio contiene un proyecto completo de **Machine Learning** cuyo objetivo es identificar, con antelación, qué combinaciones de **tienda y producto** presentan un mayor riesgo de sufrir una rotura de stock.
 
-Este proyecto desarrolla un sistema predictivo orientado a anticipar situaciones de riesgo de rotura de stock a partir de datos históricos de ventas, precios, promociones y patrones temporales. El objetivo no es sustituir los procesos de planificación de inventario, sino proporcionar una herramienta de apoyo que permita priorizar productos, tiendas o combinaciones con mayor probabilidad de presentar problemas de disponibilidad.
+Una rotura de stock ocurre cuando un producto no está disponible en el momento en que existe demanda. Esto puede provocar pérdida de ventas, menor nivel de servicio, pedidos urgentes, replanificaciones y una peor experiencia para el cliente.
 
-El trabajo se plantea como un proyecto *end-to-end* de Machine Learning aplicado a un caso logístico realista, desde el análisis exploratorio de datos hasta la generación de métricas técnicas y su traducción a indicadores de negocio.
-
----
-
-## 2. Objetivo de negocio
-
-El objetivo de negocio es identificar de forma anticipada situaciones con riesgo de rotura de stock para facilitar la toma de decisiones operativas.
-
-Si el modelo funciona correctamente, podría aportar valor en los siguientes aspectos:
-
-* Priorización de productos o tiendas con mayor riesgo.
-* Reducción de roturas de stock no detectadas.
-* Mejora de la planificación de reposición.
-* Apoyo a equipos de operaciones, aprovisionamiento o planificación.
-* Reducción de costes asociados a incidencias de disponibilidad.
-
-El problema se formula como una tarea de clasificación binaria, donde la variable objetivo indica si existe o no riesgo de *stockout*.
+El proyecto utiliza datos históricos de ventas, precios, promociones y comportamiento temporal para construir un sistema de apoyo a la decisión. El modelo no sustituye a un sistema de gestión de almacén ni decide automáticamente cuánto comprar. Su función es **priorizar los casos que deberían ser revisados primero por un equipo de planificación o aprovisionamiento**.
 
 ---
 
-## 3. Descripción del dataset
+## Índice
 
-El dataset utilizado contiene información histórica de ventas en diferentes tiendas y productos. Las variables originales incluyen información como fecha, tienda, producto, ventas, precio y promociones.
-
-A partir de estas variables se construyen nuevas características relacionadas con temporalidad, comportamiento histórico de la demanda y variabilidad de ventas.
-
-Las principales variables utilizadas en el proyecto son:
-
-* `sales`: unidades vendidas.
-* `price`: precio del producto.
-* `promo`: indicador de promoción.
-* `weekday`: día de la semana.
-* `month`: mes.
-* `week`: semana del año.
-* `sales_lag_7`, `sales_lag_14`, `sales_lag_30`: ventas retrasadas.
-* `rolling_mean_7`, `rolling_mean_14`, `rolling_mean_30`: medias móviles de demanda.
-* `rolling_std_30`: variabilidad reciente de la demanda.
-* `trend_7_30`: diferencia entre demanda reciente y demanda de más largo plazo.
-* `lead_time_days`: plazo estimado de reposición.
-* `stockout_risk`: variable objetivo.
-
-Debido al tamaño del dataset original, no se adjunta al proyecto. Se puede consultar y descargar  en:
-https://www.kaggle.com/datasets/dhrubangtalukdar/store-item-demand-forecasting-dataset
-
----
-
-## 4. Análisis exploratorio de datos
-
-El análisis exploratorio se realizó en el notebook `01_eda.ipynb`.
-
-Durante esta fase se analizaron:
-
-* Ventas por fecha.
-* Evolución temporal de ventas.
-* Ventas medias por mes.
-* Ventas medias por día de la semana.
-* Distribución de ventas por producto.
-* Distribución de precios.
-* Impacto de promociones por tienda y producto.
-* Variabilidad de la demanda.
-* Posibles patrones estacionales.
-* Relación entre ventas, precio y promoción.
-
-Este análisis permitió justificar la creación de variables temporales, retardos de ventas, medias móviles y métricas de variabilidad de demanda. Estas variables son relevantes porque el riesgo de rotura de stock está relacionado con el comportamiento reciente de la demanda y con patrones temporales o comerciales como promociones y cambios de precio.
+1. [Resumen para una persona no técnica](#resumen-para-una-persona-no-técnica)
+2. [Objetivo de negocio](#objetivo-de-negocio)
+3. [Qué pregunta responde el proyecto](#qué-pregunta-responde-el-proyecto)
+4. [Alcance y limitación principal](#alcance-y-limitación-principal)
+5. [Cómo funciona el proyecto](#cómo-funciona-el-proyecto)
+6. [Esquema completo del sistema](#esquema-completo-del-sistema)
+7. [Los cuatro notebooks](#los-cuatro-notebooks)
+8. [Estructura del repositorio](#estructura-del-repositorio)
+9. [Descripción de los datos](#descripción-de-los-datos)
+10. [Variables utilizadas](#variables-utilizadas)
+11. [Modelos comparados](#modelos-comparados)
+12. [Métricas de evaluación](#métricas-de-evaluación)
+13. [Explicabilidad y análisis de errores](#explicabilidad-y-análisis-de-errores)
+14. [Traducción del modelo a negocio](#traducción-del-modelo-a-negocio)
+15. [Cómo ejecutar el proyecto](#cómo-ejecutar-el-proyecto)
+16. [Archivos generados](#archivos-generados)
+17. [Cómo podría utilizarse en una empresa](#cómo-podría-utilizarse-en-una-empresa)
+18. [Propuesta conceptual de puesta en producción](#propuesta-conceptual-de-puesta-en-producción)
+19. [Limitaciones](#limitaciones)
+20. [Mejoras futuras](#mejoras-futuras)
+21. [Tecnologías utilizadas](#tecnologías-utilizadas)
 
 ---
 
-## 5. Ingeniería de variables
+## Resumen para una persona no técnica
 
-La ingeniería de variables se desarrolló en el notebook `02_feature_engineering.ipynb`.
+El funcionamiento general puede entenderse con este ejemplo:
 
-Se generaron variables temporales a partir de la fecha:
+1. El sistema revisa el historial de ventas de cada producto en cada tienda.
+2. Observa si las ventas recientes están subiendo o bajando.
+3. Tiene en cuenta aspectos como el precio, las promociones, el día de la semana y el plazo de reposición.
+4. Aprende de ejemplos históricos previamente preparados.
+5. Para cada combinación tienda-producto, genera una probabilidad de riesgo.
+6. Los casos con mayor probabilidad se sitúan al principio de una lista.
+7. El equipo de negocio puede revisar primero los casos más urgentes.
 
-* Año.
-* Mes.
-* Trimestre.
-* Semana.
-* Día de la semana.
-* Día del mes.
+El resultado no debe interpretarse como:
 
-También se generaron variables basadas en el histórico de ventas por combinación tienda-producto:
+> “Este producto se quedará sin stock con total seguridad”.
 
-* Retardos de ventas a 7, 14 y 30 días.
-* Medias móviles a 7, 14 y 30 días.
-* Desviación estándar móvil.
-* Tendencia entre demanda reciente y demanda de mayor plazo.
+La interpretación correcta es:
 
-La variable objetivo `stockout_risk` se construyó comparando la demanda futura estimada a 7 días con una aproximación del stock disponible y stock de seguridad.
+> “Según los patrones aprendidos, este caso presenta más riesgo que otros y debería revisarse antes”.
 
-Para evitar *data leakage*, se excluyeron del modelado variables directamente relacionadas con la construcción del target, como:
-
-* `future_demand_7d`
-* `stock_estimated`
-* `safety_stock`
-
-Estas variables se utilizaron para definir el problema, pero no para entrenar los modelos predictivos.
+Esta diferencia es importante porque un modelo predictivo no elimina la incertidumbre. Su utilidad consiste en ayudar a priorizar mejor el trabajo.
 
 ---
 
-## 6. Modelado predictivo
+## Objetivo de negocio
 
-El modelado se realizó en el notebook `03_model_training.ipynb`.
+El objetivo principal es construir un sistema capaz de:
 
-Se compararon tres modelos:
+- detectar patrones relacionados con un posible riesgo de falta de disponibilidad;
+- asignar una probabilidad de riesgo a cada combinación de tienda y producto;
+- ordenar los casos desde mayor hasta menor riesgo;
+- ayudar a los equipos de planificación a concentrarse en los casos más importantes;
+- reducir, de forma potencial, las ventas perdidas y las actuaciones urgentes;
+- convertir los resultados técnicos del modelo en indicadores comprensibles para negocio.
 
-### 6.1. Logistic Regression
+El proyecto está planteado como un caso de uso logístico de clasificación binaria:
 
-Se utilizó como modelo *baseline* interpretable. Permite establecer una referencia inicial y facilita la interpretación general del comportamiento de las variables.
-
-### 6.2. Random Forest
-
-Se utilizó como modelo robusto basado en árboles, capaz de capturar relaciones no lineales y manejar interacciones entre variables.
-
-### 6.3. XGBoost
-
-Se utilizó como modelo avanzado de *boosting*, habitualmente competitivo en problemas tabulares y adecuado para capturar patrones complejos.
-
-La partición entre entrenamiento y test se realizó de forma temporal, utilizando los datos más antiguos para entrenar y los datos posteriores para evaluar. Esta decisión es más realista en un problema logístico, ya que en producción el modelo se entrenaría con información pasada para predecir situaciones futuras.
+- `0`: situación clasificada como sin riesgo;
+- `1`: situación clasificada como con riesgo.
 
 ---
 
-## 7. Evaluación técnica
+## Qué pregunta responde el proyecto
 
-Los modelos se evaluaron mediante accuracy, precision, recall, F1-score y ROC-AUC. Además, se generaron matrices de confusión y curvas ROC para analizar el comportamiento de los modelos desde una perspectiva técnica y operativa.
+La pregunta principal es:
 
-La comparación final de modelos fue la siguiente:
+> ¿Qué combinaciones de tienda y producto presentan mayor riesgo de no disponer de suficiente stock para cubrir la demanda esperada durante el plazo de reposición?
 
-| Modelo | Accuracy | Precision | Recall | F1-score | ROC-AUC |
-|---|---:|---:|---:|---:|---:|
-| Logistic Regression | 0.5725 | 0.6351 | 0.6067 | 0.6206 | 0.5890 |
-| XGBoost | 0.5903 | 0.6730 | 0.5621 | 0.6126 | 0.6238 |
-| Random Forest | 0.5899 | 0.6727 | 0.5615 | 0.6121 | 0.6227 |
+El modelo también permite responder preguntas secundarias:
 
-### Interpretación operativa del modelo final
+- ¿Qué factores influyen más en la predicción?
+- ¿Qué productos o tiendas acumulan más alertas?
+- ¿Cuántos casos de riesgo consigue detectar?
+- ¿Cuántas alertas incorrectas genera?
+- ¿Qué umbral de decisión conviene utilizar?
+- ¿Qué porcentaje de los casos de riesgo se detectaría revisando solo el 10 %, 20 % o 30 % con mayor probabilidad?
+- ¿Cómo podría integrarse este sistema en un proceso logístico real?
 
-A partir de la matriz de confusión del modelo final, se obtienen los siguientes resultados operativos:
+---
 
-| Indicador | Valor |
+## Alcance y limitación principal
+
+El dataset original contiene información de ventas, precios y promociones, pero **no incluye inventario físico real, pedidos pendientes, fechas reales de reposición ni ventas perdidas**.
+
+Por este motivo, no es posible observar directamente una rotura de stock real.
+
+Para poder desarrollar el ejercicio, se construye un target denominado:
+
+```text
+stockout_risk
+```
+
+Este target representa una **aproximación sintética al riesgo**. Se calcula utilizando demanda histórica, demanda futura y variables logísticas simuladas de forma reproducible.
+
+Por tanto:
+
+- el proyecto sí permite evaluar un pipeline completo de Machine Learning;
+- sí permite comparar modelos y estudiar patrones de riesgo;
+- sí permite analizar cómo podría priorizarse la operación;
+- no demuestra que las roturas detectadas hayan ocurrido realmente;
+- las estimaciones económicas son escenarios simulados, no ahorros certificados.
+
+En un proyecto empresarial real, el target debería construirse con información procedente del WMS, ERP o sistema de aprovisionamiento.
+
+---
+
+## Cómo funciona el proyecto
+
+El repositorio sigue una secuencia de cuatro fases:
+
+### Fase 1. Comprender los datos
+
+Se analiza el dataset original para comprobar:
+
+- qué columnas contiene;
+- cuántos registros existen;
+- qué periodo cubre;
+- si hay valores nulos;
+- si existen duplicados;
+- cómo evolucionan las ventas;
+- cómo se comportan tiendas y productos;
+- qué relación aparente tienen el precio y las promociones con las ventas.
+
+### Fase 2. Preparar la información para el modelo
+
+Se crean variables que resumen el comportamiento reciente de cada producto:
+
+- ventas de días anteriores;
+- medias móviles;
+- variabilidad de la demanda;
+- tendencias;
+- información del calendario;
+- precio reciente;
+- promociones recientes;
+- plazo estimado de reposición.
+
+En esta fase también se crea la variable objetivo `stockout_risk`.
+
+### Fase 3. Entrenar y comparar modelos
+
+Se dividen los datos respetando el orden temporal:
+
+- los datos más antiguos se utilizan para entrenar;
+- los datos más recientes se reservan para comprobar el comportamiento del modelo.
+
+Después se comparan varios algoritmos y se selecciona el que ofrece el mejor equilibrio entre las métricas elegidas.
+
+### Fase 4. Interpretar y convertir los resultados en decisiones
+
+Se analiza:
+
+- qué variables son más importantes;
+- qué errores comete el modelo;
+- cuántas alertas genera;
+- qué ocurre al cambiar el umbral;
+- qué porcentaje de riesgo puede capturarse revisando solo los casos prioritarios;
+- cómo podría utilizarse el sistema dentro de una empresa.
+
+---
+
+## Esquema completo del sistema
+
+```text
+┌──────────────────────────────────────┐
+│ Dataset original de ventas           │
+│ retail_sales.csv                     │
+│                                      │
+│ Fecha · Tienda · Producto · Ventas   │
+│ Precio · Promoción                   │
+└───────────────────┬──────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────┐
+│ Notebook 01                         │
+│ Análisis exploratorio de datos       │
+│                                      │
+│ Revisión de calidad, distribución,   │
+│ evolución temporal y patrones        │
+└───────────────────┬──────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────┐
+│ Notebook 02                         │
+│ Ingeniería de variables              │
+│                                      │
+│ Lags, medias móviles, tendencias,    │
+│ variables temporales y target        │
+└───────────────────┬──────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────┐
+│ Dataset preparado                    │
+│ stockout_dataset.csv                 │
+└───────────────────┬──────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────┐
+│ Notebook 03                         │
+│ Entrenamiento y evaluación           │
+│                                      │
+│ Baseline · Regresión logística       │
+│ Random Forest · XGBoost              │
+└───────────────────┬──────────────────┘
+                    │
+                    ├──────────────► Modelo seleccionado
+                    ├──────────────► Métricas
+                    ├──────────────► Predicciones
+                    └──────────────► Gráficos
+                    │
+                    ▼
+┌──────────────────────────────────────┐
+│ Notebook 04                         │
+│ Explicabilidad y negocio             │
+│                                      │
+│ Importancia de variables             │
+│ Análisis de errores                  │
+│ Umbrales y priorización              │
+│ Escenarios económicos simulados      │
+└───────────────────┬──────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────┐
+│ Resultado para negocio               │
+│                                      │
+│ Lista priorizada de riesgos          │
+│ Recomendación de umbral              │
+│ Informes, métricas y visualizaciones │
+└──────────────────────────────────────┘
+```
+
+---
+
+## Los cuatro notebooks
+
+Los notebooks deben ejecutarse en orden porque cada uno utiliza resultados generados por el anterior.
+
+### 1. `01_eda_nivel_curso.ipynb`
+
+Este notebook realiza el análisis exploratorio de datos, conocido como EDA.
+
+Su finalidad es conocer el dataset antes de modificarlo o utilizarlo para entrenar modelos.
+
+Incluye:
+
+- carga del archivo original;
+- revisión de nombres y tipos de columnas;
+- conversión de fechas y valores numéricos;
+- análisis de valores ausentes;
+- comprobación de duplicados;
+- estadísticas descriptivas;
+- análisis temporal de las ventas;
+- ventas por tienda y producto;
+- comportamiento por día, mes y semana;
+- análisis de precios y promociones;
+- revisión de registros con ventas iguales a cero;
+- generación de tablas y gráficos.
+
+Una venta igual a cero no se considera automáticamente una rotura de stock. También puede significar que no hubo demanda. Por eso, los ceros se investigan, pero no se utilizan directamente como variable objetivo.
+
+**Entradas principales:**
+
+```text
+data/raw/retail_sales.csv
+```
+
+**Salidas principales:**
+
+```text
+outputs/figures/eda/
+outputs/tables/eda/
+```
+
+---
+
+### 2. `02_feature_engineering_revisado.ipynb`
+
+Este notebook transforma el dataset original en un conjunto de datos adecuado para Machine Learning.
+
+La ingeniería de variables consiste en convertir datos básicos en indicadores que ayuden al modelo a encontrar patrones.
+
+Por ejemplo, una fila original puede indicar que hoy se han vendido 20 unidades. El notebook añade información como:
+
+- ventas de ayer;
+- ventas de hace una semana;
+- media de ventas de los últimos 7 días;
+- media de ventas de los últimos 30 días;
+- variabilidad reciente;
+- tendencia de la demanda;
+- número de días recientes en promoción;
+- precio medio reciente;
+- día de la semana;
+- mes;
+- semana del año;
+- plazo estimado de reposición.
+
+Este notebook también crea `stockout_risk`, la variable que el modelo intentará predecir.
+
+Para evitar que el modelo utilice información del futuro, las variables históricas se calculan por separado para cada combinación de tienda y producto y se desplazan cuando corresponde.
+
+**Entradas principales:**
+
+```text
+data/raw/retail_sales.csv
+```
+
+**Salidas principales:**
+
+```text
+data/processed/stockout_dataset.csv
+outputs/tables/feature_engineering/feature_catalog.csv
+outputs/tables/feature_engineering/feature_engineering_metadata.json
+outputs/figures/feature_engineering/
+```
+
+---
+
+### 3. `03_model_training_comentado.ipynb`
+
+Este notebook entrena y compara los modelos predictivos.
+
+Se utilizan los datos generados en el notebook anterior y se realiza una separación temporal. Esto significa que el modelo aprende con el pasado y se evalúa con un periodo posterior.
+
+No se utiliza una división aleatoria convencional porque mezclar fechas antiguas y futuras podría producir una evaluación poco realista.
+
+Los modelos comparados son:
+
+- Dummy Classifier, utilizado como referencia mínima;
+- Regresión Logística;
+- Random Forest;
+- XGBoost.
+
+El notebook calcula métricas de clasificación, genera gráficos y guarda:
+
+- todos los resultados de comparación;
+- las predicciones del conjunto de test;
+- la lista de variables utilizadas;
+- los metadatos del entrenamiento;
+- el mejor modelo entrenado.
+
+**Entrada principal:**
+
+```text
+data/processed/stockout_dataset.csv
+```
+
+**Salidas principales:**
+
+```text
+models/best_stockout_model.pkl
+models/model_features.json
+models/model_metadata.json
+outputs/metrics/
+outputs/predictions/test_predictions_best_model.csv
+outputs/figures/model_training/
+```
+
+---
+
+### 4. `04_explainability_business_optimizado.ipynb`
+
+Este notebook analiza el modelo final desde una perspectiva técnica y empresarial.
+
+Incluye cuatro bloques:
+
+#### Evaluación final
+
+Recalcula las métricas sobre las predicciones guardadas por el notebook 03 y genera:
+
+- matriz de confusión;
+- curva ROC;
+- curva Precision-Recall;
+- informe de clasificación.
+
+#### Explicabilidad
+
+Analiza qué variables influyen más en las predicciones mediante:
+
+- importancia nativa del modelo;
+- importancia por permutación;
+- SHAP, cuando la librería y el tipo de modelo lo permiten.
+
+La importancia de una variable no demuestra causalidad. Solo indica cuánto depende el modelo de esa información para realizar sus predicciones.
+
+#### Análisis de errores
+
+Se estudian cuatro resultados posibles:
+
+- verdadero positivo: detecta correctamente un riesgo;
+- falso positivo: genera una alerta que no correspondía con riesgo;
+- falso negativo: no detecta un caso de riesgo;
+- verdadero negativo: descarta correctamente un caso sin riesgo.
+
+Desde el punto de vista logístico, los falsos negativos son especialmente relevantes porque representan riesgos que el sistema no habría señalado.
+
+#### Métricas de negocio
+
+Se comparan distintos umbrales de decisión y diferentes capacidades operativas.
+
+Por ejemplo:
+
+- revisar solo el 10 % con más riesgo;
+- revisar el 20 %;
+- revisar el 30 %;
+- estimar cuántos casos positivos se capturan en cada escenario.
+
+También se crean simulaciones económicas. Estas simulaciones dependen de costes hipotéticos y deben sustituirse por cifras reales antes de tomar decisiones empresariales.
+
+**Entradas principales:**
+
+```text
+data/processed/stockout_dataset.csv
+models/best_stockout_model.pkl
+models/model_features.json
+models/model_metadata.json
+outputs/predictions/test_predictions_best_model.csv
+```
+
+**Salidas principales:**
+
+```text
+outputs/metrics/
+outputs/figures/explainability_business/
+outputs/reports/
+```
+
+---
+
+## Estructura del repositorio
+
+```text
+TFM_BIGSCHOOL/
+│
+├── README.md
+├── requirements.txt
+│
+├── data/
+│   ├── raw/
+│   │   └── retail_sales.csv
+│   │
+│   └── processed/
+│       └── stockout_dataset.csv
+│
+├── notebooks/
+│   ├── 01_eda_nivel_curso.ipynb
+│   ├── 02_feature_engineering_revisado.ipynb
+│   ├── 03_model_training_comentado.ipynb
+│   └── 04_explainability_business_optimizado.ipynb
+│
+├── models/
+│   ├── best_stockout_model.pkl
+│   ├── model_features.json
+│   └── model_metadata.json
+│
+├── outputs/
+│   ├── figures/
+│   │   ├── eda/
+│   │   ├── feature_engineering/
+│   │   ├── model_training/
+│   │   └── explainability_business/
+│   │
+│   ├── tables/
+│   │   ├── eda/
+│   │   └── feature_engineering/
+│   │
+│   ├── metrics/
+│   ├── predictions/
+│   │   └── test_predictions_best_model.csv
+│   │
+│   └── reports/
+│
+└── src/
+```
+
+### Explicación de cada carpeta
+
+#### `data/raw`
+
+Contiene los datos originales.
+
+Estos archivos deben mantenerse sin modificar para conservar una copia de la fuente inicial.
+
+#### `data/processed`
+
+Contiene datos transformados y preparados para el entrenamiento.
+
+El archivo principal es:
+
+```text
+stockout_dataset.csv
+```
+
+#### `notebooks`
+
+Contiene el desarrollo del proyecto dividido en cuatro fases.
+
+Los números iniciales indican el orden de ejecución.
+
+#### `models`
+
+Contiene el modelo seleccionado y la información necesaria para reutilizarlo.
+
+El archivo `.pkl` almacena el modelo ya entrenado.
+
+#### `outputs/figures`
+
+Contiene los gráficos generados en cada fase.
+
+Se separan por notebook para facilitar su localización.
+
+#### `outputs/tables`
+
+Contiene tablas de análisis, controles de calidad y catálogos de variables.
+
+#### `outputs/metrics`
+
+Contiene las métricas de entrenamiento, evaluación, umbrales, errores e importancia de variables.
+
+#### `outputs/predictions`
+
+Contiene las predicciones realizadas sobre el conjunto de test.
+
+Cada fila incluye el resultado real, la clase predicha y la probabilidad estimada.
+
+#### `outputs/reports`
+
+Contiene informes complementarios, ejemplos de errores y resultados de explicabilidad.
+
+#### `src`
+
+Está reservada para funciones reutilizables si el proyecto se transforma posteriormente en una aplicación o pipeline automatizado.
+
+---
+
+## Descripción de los datos
+
+El dataset utiliza una granularidad diaria por:
+
+```text
+fecha + tienda + producto
+```
+
+Las columnas originales principales son:
+
+| Columna | Significado |
+|---|---|
+| `date` | Fecha de la observación |
+| `store_id` | Identificador de la tienda |
+| `item_id` | Identificador del producto |
+| `sales` | Unidades vendidas |
+| `price` | Precio del producto |
+| `promo` | Indica si el producto estaba en promoción |
+
+El proyecto no interpreta una fila de forma aislada. Cada observación se relaciona con el historial de ventas anterior de esa misma combinación tienda-producto.
+
+---
+
+## Variables utilizadas
+
+Las variables creadas pueden agruparse en varias familias.
+
+### Variables de calendario
+
+Representan el momento en el que se realiza la observación:
+
+- año;
+- mes;
+- semana;
+- día de la semana;
+- fin de semana;
+- variables cíclicas del calendario.
+
+Estas variables permiten detectar estacionalidades y patrones repetitivos.
+
+### Historial de ventas
+
+Incluyen las ventas observadas en momentos anteriores:
+
+- `sales_lag_1`;
+- `sales_lag_7`;
+- `sales_lag_14`;
+- `sales_lag_30`.
+
+Por ejemplo, `sales_lag_7` representa las ventas de la misma tienda y producto siete días antes.
+
+### Ventanas móviles
+
+Resumen el comportamiento reciente:
+
+- media de 7 días;
+- media de 14 días;
+- media de 30 días;
+- desviación estándar;
+- mínimos y máximos;
+- tendencia reciente.
+
+Estas variables ayudan a distinguir entre una demanda estable y una demanda que está aumentando o disminuyendo.
+
+### Precio y promoción
+
+Incluyen:
+
+- precio actual;
+- precio medio reciente;
+- comparación del precio actual con su media;
+- promoción actual;
+- promoción del día anterior;
+- número de días recientes en promoción.
+
+### Variables logísticas
+
+Incluyen un plazo de reposición aproximado:
+
+```text
+lead_time_days
+```
+
+Este dato representa el tiempo que podría tardar la reposición del producto.
+
+En este proyecto se simula de forma reproducible porque no existe en el dataset original.
+
+---
+
+## Modelos comparados
+
+### Dummy Classifier
+
+Es un modelo de referencia.
+
+No intenta aprender relaciones complejas. Sirve para comprobar si los modelos reales aportan valor frente a una estrategia básica.
+
+### Regresión Logística
+
+Es un modelo lineal sencillo e interpretable.
+
+Permite establecer una base sólida y entender si existe una relación aproximadamente lineal entre las variables y la probabilidad de riesgo.
+
+### Random Forest
+
+Combina múltiples árboles de decisión.
+
+Puede detectar relaciones no lineales e interacciones entre variables, aunque consume más recursos y puede ser más difícil de interpretar.
+
+### XGBoost
+
+Es un modelo de boosting basado en árboles.
+
+Construye árboles de forma secuencial, haciendo que cada nuevo árbol intente corregir errores de los anteriores.
+
+En las pruebas realizadas fue el modelo con mejor rendimiento global, aunque la diferencia frente a otras alternativas no es extrema.
+
+---
+
+## Métricas de evaluación
+
+No existe una única métrica suficiente para evaluar un problema de clasificación.
+
+### Accuracy
+
+Indica el porcentaje total de predicciones correctas.
+
+Puede resultar engañosa cuando una clase es mucho más frecuente que la otra.
+
+### Precision
+
+De todas las alertas generadas, indica qué proporción correspondía realmente a casos positivos.
+
+Una precision baja implica muchas alertas incorrectas.
+
+### Recall
+
+De todos los casos positivos, indica qué porcentaje consigue detectar el modelo.
+
+En este proyecto es especialmente importante porque un falso negativo representa un riesgo que no habría sido advertido.
+
+### F1-score
+
+Combina precision y recall en una única métrica.
+
+Es útil cuando se busca un equilibrio entre detectar riesgos y no generar demasiadas falsas alertas.
+
+### ROC-AUC
+
+Mide la capacidad del modelo para ordenar casos positivos por encima de casos negativos utilizando todos los umbrales posibles.
+
+### PR-AUC
+
+Resume la relación entre precision y recall.
+
+Es especialmente útil cuando interesa estudiar la clase positiva y cuando existe desbalance.
+
+---
+
+## Resultados generales
+
+Los resultados obtenidos muestran una capacidad predictiva moderada.
+
+El modelo seleccionado logra detectar una proporción elevada de los casos positivos, pero también genera falsas alertas.
+
+Esto significa que el sistema puede ser útil para **priorizar revisiones**, pero no debería ejecutar decisiones automáticas sin validación humana.
+
+En una ejecución previa del proyecto, XGBoost obtuvo aproximadamente:
+
+| Métrica | Resultado aproximado |
 |---|---:|
-| Stockouts correctamente detectados | 312.044 |
-| Stockouts no detectados | 202.258 |
-| Alertas falsas generadas | 179.268 |
+| Accuracy | 0,61 |
+| Precision | 0,63 |
+| Recall | 0,80 |
+| F1-score | 0,71 |
+| ROC-AUC | 0,63 |
 
-Estos resultados muestran que el modelo es capaz de detectar una parte relevante de los casos de riesgo, aunque todavía deja sin identificar un número considerable de stockouts. También genera falsas alertas, lo que implica que su uso en un entorno real debería ir acompañado de una estrategia de priorización y revisión operativa.
+Estos valores deben actualizarse con los CSV generados por la ejecución definitiva del notebook 03.
 
-Desde el punto de vista de negocio, esto significa que el modelo puede ser útil como sistema de apoyo a la decisión, pero no como mecanismo automático de reposición sin supervisión.
+La lectura de negocio sería:
 
-Aunque XGBoost y Random Forest obtienen un ROC-AUC superior, la regresión logística presenta un recall más alto. En un contexto logístico, este punto es relevante porque el recall mide la capacidad del modelo para detectar casos reales de riesgo de rotura de stock.
-
-La elección del modelo final depende del criterio de negocio. Si se prioriza la capacidad de detección de stockouts, la regresión logística ofrece un comportamiento interesante como modelo base. Si se prioriza una mejor separación general entre clases, XGBoost presenta mejor ROC-AUC.
-
-En este proyecto se mantiene un enfoque prudente: los resultados muestran una capacidad predictiva moderada. El modelo no debe interpretarse como una solución definitiva de predicción de roturas de stock, sino como una herramienta de priorización que puede ayudar a identificar casos con mayor probabilidad de riesgo.
-
-Los resultados finales se encuentran en:
-
-```text
-outputs/metrics/model_metrics.csv
-```
-
-Y las visualizaciones principales en:
-
-```text
-outputs/figures/
-```
+- el modelo consigue recuperar una parte importante de los casos de riesgo;
+- varias alertas serán falsos positivos;
+- el sistema funciona mejor como herramienta de priorización que como sistema de decisión automática;
+- todavía existe margen de mejora antes de un uso real.
 
 ---
 
-## 8. Explicabilidad del modelo
+## Explicabilidad y análisis de errores
 
-La explicabilidad del modelo se analizó mediante la importancia de variables. El objetivo fue identificar qué factores tenían mayor influencia en la predicción del riesgo de stockout y comprobar si el comportamiento del modelo era coherente desde el punto de vista logístico.
+Un modelo no debe evaluarse únicamente por su puntuación.
 
-Las variables más relevantes fueron:
+También es necesario entender:
 
-| Variable | Importancia |
-|---|---:|
-| rolling_mean_14 | 1.6194 |
-| rolling_mean_30 | 0.9024 |
-| rolling_mean_7 | 0.8530 |
-| sales | 0.3797 |
-| trend_7_30 | 0.2235 |
+- qué variables utiliza;
+- qué comportamientos aprende;
+- dónde falla;
+- si sus errores se concentran en determinadas tiendas, productos o periodos.
 
-La presencia de variables como `rolling_mean_14`, `rolling_mean_30`, `rolling_mean_7` y `sales` entre las más importantes indica que el comportamiento histórico de la demanda tiene un peso relevante en la predicción del riesgo de stockout.
+### Importancia global
 
-Esto es coherente con el problema de negocio: las roturas de stock suelen estar relacionadas con patrones recientes de consumo, incrementos de demanda, variabilidad temporal y diferencias entre demanda reciente y demanda histórica.
+La importancia global muestra qué variables influyen más en el conjunto de predicciones.
 
-La variable `trend_7_30` también aporta información útil, ya que representa la diferencia entre la demanda reciente y una ventana temporal más amplia. Esta variable puede ayudar a detectar cambios de tendencia que podrían anticipar situaciones de riesgo.
+Se utilizan:
 
----
+- importancia propia del algoritmo;
+- importancia por permutación;
+- SHAP, cuando es compatible.
 
-## 9. Métricas de negocio
+### Explicación individual
 
-Además de las métricas técnicas, se realizó una simulación de impacto de negocio para analizar cómo podrían traducirse las predicciones del modelo a indicadores operativos.
+SHAP puede ayudar a explicar por qué una predicción concreta tiene una probabilidad alta o baja.
 
-Las métricas consideradas fueron:
+Por ejemplo, una alerta podría estar impulsada por:
 
-- Stockouts detectados.
-- Stockouts no detectados.
-- Falsas alertas.
-- Coste estimado de no detectar una rotura de stock.
-- Coste estimado de revisar una alerta.
-- Ahorro potencial estimado.
-- Priorización de casos de mayor riesgo.
+- crecimiento reciente de las ventas;
+- promedio móvil elevado;
+- plazo de reposición largo;
+- promociones recientes;
+- diferencias entre la venta actual y la histórica.
 
-Al no disponer de costes reales de negocio, se definieron escenarios simulados. Estos escenarios no deben interpretarse como un impacto económico validado, sino como una forma de mostrar cómo el modelo podría evaluarse desde una perspectiva empresarial.
+### Análisis de falsos negativos
 
-### Priorización de casos de riesgo
+Los falsos negativos son casos de riesgo que el modelo no detecta.
 
-Una forma práctica de utilizar el modelo sería ordenar los casos por probabilidad predicha de stockout y revisar solo los casos con mayor riesgo.
+Son importantes porque podrían traducirse en:
 
-| Top de casos revisados | Casos revisados | Stockouts capturados | Tasa de captura | Precisión de alertas |
-|---:|---:|---:|---:|---:|
-| 5 % | 44.625 | 30.914 | 0.0601 | 0.6929 |
-| 10 % | 89.250 | 61.637 | 0.1199 | 0.6907 |
-| 20 % | 178.500 | 121.354 | 0.2360 | 0.6799 |
-| 30 % | 267.750 | 178.941 | 0.3479 | 0.6683 |
+- falta de mercancía;
+- pérdida de ventas;
+- incumplimiento del nivel de servicio;
+- expediciones urgentes.
 
-Estos resultados muestran que el modelo puede utilizarse como herramienta de priorización. Por ejemplo, revisando el 10 % de los casos con mayor riesgo se capturaría aproximadamente el 12 % de los stockouts reales, con una precisión de alerta cercana al 69 %.
+### Análisis de falsos positivos
 
-Aunque la tasa de captura no es elevada, la precisión de las alertas prioritarias es razonable. Esto indica que el modelo puede aportar valor si se utiliza para ordenar riesgos, no necesariamente para automatizar decisiones finales.
+Los falsos positivos son alertas que finalmente no correspondían a un caso positivo.
 
-## Interpretación de resultados
+Pueden provocar:
 
-Los resultados obtenidos muestran que el problema de predicción de stockout es complejo con las variables disponibles. El rendimiento del modelo es moderado, especialmente en términos de ROC-AUC, lo que indica que la separación entre casos con riesgo y sin riesgo no es completamente clara.
+- revisiones innecesarias;
+- exceso de stock;
+- inmovilización de capital;
+- pérdida de confianza en el sistema.
 
-Esta limitación puede deberse a varios factores:
-
-- El dataset no contiene stock real observado.
-- La variable objetivo se ha construido mediante una aproximación.
-- No se dispone de incidencias reales de rotura de stock.
-- No se incluyen variables como proveedor, calendario de reposición, lead time real, festivos, pedidos pendientes o restricciones logísticas.
-- El comportamiento de la demanda puede estar influido por factores externos no presentes en los datos.
-
-Aun así, el modelo permite construir una primera aproximación útil para priorizar casos de riesgo. Desde una perspectiva empresarial, su valor no estaría en sustituir la planificación de inventario, sino en servir como herramienta de apoyo para identificar combinaciones tienda-producto que merecen una revisión prioritaria.
+El objetivo no es eliminar completamente uno de los dos errores, sino encontrar un equilibrio razonable para la operación.
 
 ---
 
-## 10. Propuesta conceptual de producción
+## Traducción del modelo a negocio
 
-En un escenario real, el modelo podría desplegarse como un proceso batch diario.
+El modelo genera una probabilidad entre 0 y 1.
 
-El flujo propuesto sería:
-
-1. Extracción diaria de datos de ventas, stock, promociones y calendario.
-2. Generación automática de variables.
-3. Aplicación del modelo entrenado.
-4. Generación de una tabla de riesgos por tienda-producto.
-5. Visualización en un dashboard operativo.
-6. Priorización de alertas para equipos de aprovisionamiento o planificación.
-
-El modelo podría reentrenarse mensualmente o cuando se detecte pérdida de rendimiento. Para ello se monitorizarían métricas como:
-
-* Recall.
-* Precision.
-* Distribución de probabilidades.
-* Tasa de alertas.
-* Posibles cambios en la distribución de las variables de entrada.
-
-También sería recomendable controlar el *data drift*, especialmente en variables como:
-
-* Ventas.
-* Promociones.
-* Precios.
-* Patrones temporales de demanda.
-
-Una posible arquitectura sería:
+Por ejemplo:
 
 ```text
-Fuentes de datos
-      ↓
-Proceso ETL diario
-      ↓
-Generación de variables
-      ↓
-Modelo predictivo entrenado
-      ↓
-Tabla de riesgos stockout
-      ↓
-Dashboard operativo
-      ↓
-Acciones de planificación y reposición
+0,18 → riesgo bajo
+0,52 → riesgo medio
+0,87 → riesgo alto
 ```
-## 11. Conclusiones
 
-El proyecto ha permitido desarrollar un pipeline completo de Machine Learning aplicado a la predicción del riesgo de rotura de stock en un entorno logístico.
+Para convertir la probabilidad en una alerta se utiliza un umbral.
 
-Se ha trabajado desde el análisis exploratorio de datos hasta la generación de variables, entrenamiento de modelos, evaluación técnica, explicabilidad y traducción de resultados a métricas de negocio.
+Con un umbral de `0,50`:
 
-Los resultados muestran una capacidad predictiva moderada. El modelo no alcanza un rendimiento suficientemente alto como para ser utilizado de forma automática en decisiones críticas de reposición, pero sí puede aportar valor como herramienta de priorización.
+```text
+probabilidad >= 0,50 → alerta
+probabilidad < 0,50  → sin alerta
+```
 
-La comparación entre modelos muestra que XGBoost y Random Forest ofrecen mejor ROC-AUC, mientras que la regresión logística obtiene un recall superior. Esta diferencia pone de manifiesto la importancia de elegir el modelo no solo por una métrica técnica aislada, sino por el objetivo operativo que se quiera priorizar.
+Sin embargo, el umbral de 0,50 no tiene por qué ser el mejor para la empresa.
 
-Desde el punto de vista de negocio, el modelo puede ayudar a ordenar casos por probabilidad de riesgo y facilitar la revisión de aquellos con mayor prioridad. Sin embargo, para su aplicación real sería necesario incorporar datos reales de inventario, roturas históricas, lead times reales y costes operativos validados.
+### Umbral bajo
 
-## 12. Limitaciones
+Genera más alertas:
 
-Las principales limitaciones del proyecto son:
+- aumenta la capacidad de detectar riesgos;
+- también incrementa los falsos positivos;
+- requiere más capacidad de revisión.
 
-- El dataset no contiene información real de stock físico.
-- No existen registros reales de rotura de stock observada.
-- La variable objetivo `stockout_risk` se ha construido mediante una aproximación basada en demanda futura estimada, stock estimado y stock de seguridad.
-- Las variables `stock_estimated` y `safety_stock` han sido simuladas y no se han usado como features para evitar data leakage.
-- El rendimiento predictivo es moderado, especialmente en términos de ROC-AUC.
-- El modelo genera un volumen relevante de falsas alertas.
-- No se incluyen variables externas como festivos, campañas comerciales, proveedor, calendario de reposición, pedidos pendientes o restricciones operativas.
-- Las métricas económicas se basan en escenarios simulados y no en costes reales de empresa.
+### Umbral alto
 
-Estas limitaciones no invalidan el proyecto, pero sí condicionan su interpretación. El sistema debe entenderse como una prueba de concepto académica y no como un modelo productivo validado para su uso real inmediato.
+Genera menos alertas:
+
+- reduce el trabajo operativo;
+- mejora normalmente la precisión;
+- puede dejar riesgos sin detectar.
+
+### Priorización por capacidad
+
+Una empresa puede no tener capacidad para revisar todos los casos.
+
+Una estrategia práctica sería revisar:
+
+- el 10 % con mayor riesgo;
+- el 20 %;
+- el 30 %.
+
+El notebook 04 calcula cuántos casos positivos se capturan en cada escenario.
+
+Esto permite adaptar el modelo a los recursos disponibles, en lugar de utilizar el mismo umbral para todas las operaciones.
+
+---
+
+## Cómo ejecutar el proyecto
+
+### 1. Descargar o clonar el repositorio
+
+```bash
+git clone <URL_DEL_REPOSITORIO>
+cd TFM_BIGSCHOOL
+```
+
+### 2. Crear un entorno virtual
+
+En Windows:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+En Linux o macOS:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Instalar las dependencias
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### 4. Comprobar el dataset
+
+El archivo original debe encontrarse en:
+
+```text
+data/raw/retail_sales.csv
+```
+
+### 5. Abrir Jupyter
+
+```bash
+jupyter notebook
+```
+
+También puede utilizarse JupyterLab:
+
+```bash
+jupyter lab
+```
+
+### 6. Ejecutar los notebooks en orden
+
+```text
+1. 01_eda_nivel_curso.ipynb
+2. 02_feature_engineering_revisado.ipynb
+3. 03_model_training_comentado.ipynb
+4. 04_explainability_business_optimizado.ipynb
+```
+
+No debe empezarse por el notebook 03 o 04, porque dependen de archivos generados previamente.
+
+---
+
+## Archivos generados
+
+Después de ejecutar el proyecto completo deberían existir, entre otros, los siguientes archivos:
+
+```text
+data/processed/stockout_dataset.csv
+
+models/best_stockout_model.pkl
+models/model_features.json
+models/model_metadata.json
+
+outputs/predictions/test_predictions_best_model.csv
+
+outputs/metrics/model_comparison.csv
+outputs/metrics/final_model_metrics.csv
+outputs/metrics/threshold_analysis.csv
+outputs/metrics/error_type_summary.csv
+outputs/metrics/permutation_feature_importance.csv
+
+outputs/reports/representative_prediction_errors.csv
+outputs/reports/shap_execution_status.json
+```
+
+Los nombres exactos pueden variar ligeramente según la versión del notebook, pero la organización general se mantiene.
+
+---
+
+## Cómo podría utilizarse en una empresa
+
+Un uso posible sería un proceso diario:
+
+1. El sistema recibe los datos actualizados de ventas, promociones, precios e inventario.
+2. Calcula las variables históricas de cada tienda y producto.
+3. Aplica el modelo entrenado.
+4. Asigna una probabilidad de riesgo.
+5. Ordena los casos.
+6. Genera una lista de alertas.
+7. El planificador revisa los casos prioritarios.
+8. Decide si debe adelantar un pedido, redistribuir stock o comprobar el inventario.
+
+Ejemplo de salida:
+
+| Fecha | Tienda | Producto | Probabilidad | Prioridad |
+|---|---:|---:|---:|---|
+| 2026-07-12 | 12 | 305 | 0,91 | Alta |
+| 2026-07-12 | 8 | 114 | 0,84 | Alta |
+| 2026-07-12 | 3 | 412 | 0,66 | Media |
+| 2026-07-12 | 21 | 92 | 0,23 | Baja |
+
+La acción final siempre debería depender también de:
+
+- stock disponible;
+- pedidos en tránsito;
+- stock de seguridad;
+- demanda promocional;
+- caducidad;
+- criticidad del producto;
+- capacidad del almacén;
+- criterio del planificador.
+
+---
+
+## Propuesta conceptual de puesta en producción
+
+Este proyecto no implementa una aplicación productiva, pero plantea cómo podría desplegarse.
+
+### Flujo diario
+
+```text
+WMS / ERP / Base de datos
+          │
+          ▼
+Extracción diaria de datos
+          │
+          ▼
+Validación y limpieza
+          │
+          ▼
+Cálculo de variables
+          │
+          ▼
+Aplicación del modelo
+          │
+          ▼
+Listado de riesgos
+          │
+          ▼
+Dashboard o herramienta operativa
+```
+
+### Monitorización necesaria
+
+Deberían controlarse:
+
+- calidad de los datos de entrada;
+- valores ausentes;
+- columnas inesperadas;
+- cambios en la distribución de las variables;
+- cambios en el porcentaje de alertas;
+- precision y recall cuando exista el resultado real;
+- tiempo de ejecución;
+- versión del modelo;
+- fecha del último entrenamiento.
+
+### Reentrenamiento
+
+El modelo podría reentrenarse:
+
+- cada mes;
+- cada trimestre;
+- cuando se detecte una caída de rendimiento;
+- cuando cambien de forma significativa la demanda, el surtido o la red logística.
+
+### Versionado
+
+Cada modelo debería guardar:
+
+- fecha de entrenamiento;
+- periodo utilizado;
+- lista de variables;
+- parámetros;
+- métricas;
+- versión del código;
+- ubicación del archivo generado.
+
+---
+
+## Limitaciones
+
+### 1. El target es sintético
+
+No existen datos reales de rotura de stock.
+
+### 2. No se dispone de inventario real
+
+Faltan variables fundamentales como:
+
+- stock disponible;
+- stock reservado;
+- stock en tránsito;
+- pedidos pendientes;
+- stock de seguridad real;
+- frecuencia de reposición.
+
+### 3. No se observan ventas perdidas
+
+Cuando las ventas son cero, no puede saberse si no hubo demanda o si faltaba producto.
+
+### 4. El plazo de reposición es simulado
+
+En una empresa real debería obtenerse del proveedor, WMS, ERP o maestro logístico.
+
+### 5. Las métricas económicas son escenarios
+
+No representan beneficios reales hasta que se utilicen costes y resultados observados.
+
+### 6. Capacidad predictiva moderada
+
+Las métricas indican que el modelo aporta señal, pero no una separación perfecta entre riesgo y ausencia de riesgo.
+
+### 7. No existe validación en producción
+
+El proyecto evalúa los datos históricos preparados, pero no se ha probado dentro de una operación real.
+
+---
+
+## Mejoras futuras
+
+Las principales mejoras serían:
+
+1. Incorporar inventario real.
+2. Añadir pedidos pendientes y mercancía en tránsito.
+3. Utilizar plazos de reposición reales.
+4. Registrar roturas de stock observadas.
+5. Estimar ventas perdidas.
+6. Añadir información de proveedores.
+7. Incorporar festivos y eventos locales.
+8. Añadir datos meteorológicos cuando sean relevantes.
+9. Probar validación temporal con varias ventanas.
+10. Calibrar las probabilidades del modelo.
+11. Optimizar hiperparámetros con validación temporal.
+12. Crear modelos específicos por familia de producto.
+13. Comparar con modelos de series temporales.
+14. Evaluar costes reales de falsos positivos y falsos negativos.
+15. Crear un dashboard de seguimiento.
+16. Automatizar la generación diaria de alertas.
+17. Registrar las decisiones tomadas por los planificadores.
+18. Medir el impacto real mediante una prueba piloto.
+
+---
+
+## Tecnologías utilizadas
+
+- Python
+- Jupyter Notebook
+- Pandas
+- NumPy
+- Matplotlib
+- Seaborn
+- Scikit-learn
+- XGBoost
+- SHAP
+- Joblib
+- Git y GitHub
+
+---
+
+## Conclusión
+
+El proyecto demuestra el desarrollo completo de una solución de Machine Learning aplicada a un problema logístico:
+
+- se parte de datos sin preparar;
+- se estudia su calidad y comportamiento;
+- se construyen variables predictivas;
+- se define un objetivo de clasificación;
+- se entrenan y comparan modelos;
+- se evalúan los resultados respetando el tiempo;
+- se explican las predicciones;
+- se analizan los errores;
+- se traducen las métricas a decisiones operativas;
+- se propone una posible evolución hacia producción.
+
+El principal valor del sistema no consiste en afirmar con certeza cuándo se producirá una rotura de stock, sino en **ordenar los casos por riesgo para utilizar mejor el tiempo y los recursos del equipo logístico**.
+
+La conclusión debe mantenerse dentro del alcance real de los datos: el proyecto representa una prueba académica completa y reproducible, pero necesitaría inventario y roturas observadas para validar su impacto en una operación real.

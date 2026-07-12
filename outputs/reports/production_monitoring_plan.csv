@@ -1,0 +1,7 @@
+area,indicator,frequency,action
+Calidad de datos,"Nulos, duplicados, rangos, frecuencia temporal",Cada ejecución,Detener pipeline o generar alerta
+Drift de variables,"PSI, KS o divergencia por feature",Semanal,Investigar y valorar reentrenamiento
+Drift de predicción,Distribución de probabilidades y tasa de alertas,Diario,Revisar cambios bruscos
+Rendimiento,"PR-AUC, recall, precision, F1",Cuando madure la etiqueta,Comparar con umbral operativo
+Negocio,"Cobertura top N, falsas alertas, incidencias evitadas",Semanal/Mensual,Ajustar umbral y capacidad
+Operación,Tiempo de ejecución y fallos,Cada ejecución,Reintentar o escalar incidencia
